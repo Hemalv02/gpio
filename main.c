@@ -60,6 +60,11 @@
 #define EW_YELLOW_PINS   (E_YELLOW_PIN | W_YELLOW_PIN)
 #define EW_GREEN_PINS    (E_GREEN_PIN | W_GREEN_PIN)
 
+#define NS_LOAD_LED_PIN  GPIO_PIN_12  // PA12 - North-South load indicator
+#define EW_LOAD_LED_PIN  GPIO_PIN_13  // PA13 - East-West load indicator
+#define BOTH_LOAD_LED_PIN GPIO_PIN_14 // PA14 - Both directions high load indicator
+
+
 // Traffic counters
 uint8_t ns_traffic_count = 0;
 uint8_t ew_traffic_count = 0;
@@ -71,6 +76,7 @@ void generate_traffic(void);
 void process_traffic_movement(int direction);
 uint8_t is_traffic_low(int direction);
 void clear_all_lights(void);
+void update_load_indicators(void);
 
 int main(void)
 {
@@ -93,6 +99,7 @@ int main(void)
         // Process traffic for standard green time
         for (uint32_t time = 0; time < GREEN_TIME; time += 500) {
             generate_traffic();
+            update_load_indicators();
             process_traffic_movement(NORTH_SOUTH);
             ms_delay(500);
         }
@@ -101,6 +108,7 @@ int main(void)
         if (!is_traffic_low(NORTH_SOUTH)) {
             for (uint32_t time = 0; time < EXTENDED_TIME; time += 500) {
                 generate_traffic();
+                update_load_indicators();
                 process_traffic_movement(NORTH_SOUTH);
                 ms_delay(500);
             }
@@ -110,6 +118,7 @@ int main(void)
         set_traffic_light(NORTH_SOUTH, YELLOW);
         for (uint32_t time = 0; time < YELLOW_TIME; time += 500) {
             generate_traffic();
+            update_load_indicators();
             ms_delay(500);
         }
         
@@ -120,14 +129,16 @@ int main(void)
         // Process traffic for standard green time
         for (uint32_t time = 0; time < GREEN_TIME; time += 500) {
             generate_traffic();
+            update_load_indicators();
             process_traffic_movement(EAST_WEST);
             ms_delay(500);
         }
         
-        // Check if  traffic is low on EAST-WEST, extend green time if needed
+        // Check if traffic is low on EAST-WEST, extend green time if needed
         if (!is_traffic_low(EAST_WEST)) {
             for (uint32_t time = 0; time < EXTENDED_TIME; time += 500) {
                 generate_traffic();
+                update_load_indicators();
                 process_traffic_movement(EAST_WEST);
                 ms_delay(500);
             }
@@ -137,6 +148,7 @@ int main(void)
         set_traffic_light(EAST_WEST, YELLOW);
         for (uint32_t time = 0; time < YELLOW_TIME; time += 500) {
             generate_traffic();
+            update_load_indicators();
             ms_delay(500);
         }
     }
@@ -159,7 +171,8 @@ void setup_gpio(void)
     gpio.Pin = N_RED_PIN | N_YELLOW_PIN | N_GREEN_PIN |
                S_RED_PIN | S_YELLOW_PIN | S_GREEN_PIN |
                E_RED_PIN | E_YELLOW_PIN | E_GREEN_PIN |
-               W_RED_PIN | W_YELLOW_PIN | W_GREEN_PIN;
+               W_RED_PIN | W_YELLOW_PIN | W_GREEN_PIN |
+               NS_LOAD_LED_PIN | EW_LOAD_LED_PIN | BOTH_LOAD_LED_PIN;  // Add load indicators
     GPIO_Init(GPIOA, &gpio);
     
     // Initially, all lights are off
@@ -174,7 +187,8 @@ void clear_all_lights(void)
     GPIO_WritePin(GPIOA, N_RED_PIN | N_YELLOW_PIN | N_GREEN_PIN | 
                          S_RED_PIN | S_YELLOW_PIN | S_GREEN_PIN |
                          E_RED_PIN | E_YELLOW_PIN | E_GREEN_PIN |
-                         W_RED_PIN | W_YELLOW_PIN | W_GREEN_PIN, GPIO_PIN_RESET);
+                         W_RED_PIN | W_YELLOW_PIN | W_GREEN_PIN |
+                         NS_LOAD_LED_PIN | EW_LOAD_LED_PIN | BOTH_LOAD_LED_PIN, GPIO_PIN_RESET);
 }
 
 /**
@@ -276,5 +290,30 @@ uint8_t is_traffic_low(int direction)
         return (ns_traffic_count <= TRAFFIC_LOW) ? 1 : 0;
     } else { // EAST_WEST
         return (ew_traffic_count <= TRAFFIC_LOW) ? 1 : 0;
+    }
+}
+
+
+// Function to update load indicator LEDs
+void update_load_indicators(void) {
+    // Check North-South load
+    if (ns_traffic_count > TRAFFIC_LOW) {
+        GPIO_WritePin(GPIOA, NS_LOAD_LED_PIN, GPIO_PIN_SET);
+    } else {
+        GPIO_WritePin(GPIOA, NS_LOAD_LED_PIN, GPIO_PIN_RESET);
+    }
+    
+    // Check East-West load
+    if (ew_traffic_count > TRAFFIC_LOW) {
+        GPIO_WritePin(GPIOA, EW_LOAD_LED_PIN, GPIO_PIN_SET);
+    } else {
+        GPIO_WritePin(GPIOA, EW_LOAD_LED_PIN, GPIO_PIN_RESET);
+    }
+    
+    // Check if both directions have high load
+    if (ns_traffic_count > TRAFFIC_LOW && ew_traffic_count > TRAFFIC_LOW) {
+        GPIO_WritePin(GPIOA, BOTH_LOAD_LED_PIN, GPIO_PIN_SET);
+    } else {
+        GPIO_WritePin(GPIOA, BOTH_LOAD_LED_PIN, GPIO_PIN_RESET);
     }
 }
